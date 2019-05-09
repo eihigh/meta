@@ -46,8 +46,10 @@ func New(fns ...OptionFn) {
 }
 
 type option struct {
-	tools []string
-	tasks []task
+	tools       []string
+	tasks       []task
+	beforeSetup func() error
+	afterSetup  func() error
 }
 
 type task struct {
@@ -56,12 +58,26 @@ type task struct {
 }
 
 func (o *option) setup() error {
+
+	if o.beforeSetup != nil {
+		if err := o.beforeSetup(); err != nil {
+			return err
+		}
+	}
+
 	os.Setenv("GOBIN", toolsPath())
 	for _, tool := range o.tools {
 		if err := RunV("go", "install", tool); err != nil {
 			return err
 		}
 	}
+
+	if o.afterSetup != nil {
+		if err := o.afterSetup(); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -113,6 +129,18 @@ func Tasks(fns ...TaskFn) OptionFn {
 		for _, fn := range fns {
 			o.tasks = append(o.tasks, fn())
 		}
+	}
+}
+
+func BeforeSetup(fn func() error) OptionFn {
+	return func(o *option) {
+		o.beforeSetup = fn
+	}
+}
+
+func AfterSetup(fn func() error) OptionFn {
+	return func(o *option) {
+		o.afterSetup = fn
 	}
 }
 
